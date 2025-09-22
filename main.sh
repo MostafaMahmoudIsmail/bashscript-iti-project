@@ -14,7 +14,7 @@ function mainMenu() {
 }
 
 function OperationsMenu() {
-	select choice in "Create Table" "List Tables" "Drop Table" "Insert Into Table" "Select From Table" "Return To Main Menu";
+	select choice in "Create Table" "List Tables" "Drop Table" "Insert Into Table" "Select From Table" "Update Row" "Delete Row" "Return To Main Menu";
 	do
 	case $choice in 
 	"Create Table") createTable; OperationsMenu;;
@@ -22,6 +22,8 @@ function OperationsMenu() {
 	"Drop Table") dropTable; OperationsMenu;;
 	"Insert Into Table") insertTable; OperationsMenu;;
 	"Select From Table") selectTable; OperationsMenu;;
+	"Update Row") updateRow; OperationsMenu;;
+	"Delete Row") deleteRow; OperationsMenu;;
 	"Return To Main Menu") cd ../.. ; mainMenu;;
 	*) echo "Not one of the choices";;
 	esac
@@ -109,20 +111,12 @@ function insertTable() {
     fi
 
     cols=$(head -n 1 "$tname")
-    types=$(sed -n '2p' "$tname")
-    pkName=$(sed -n '3p' "$tname" | cut -d: -f2)
+    types=$(head -n 2 "$tname" | tail -n 1)
+    pkName=$(head -n 3 "$tname" | tail -n 1 | cut -d: -f2)
 
-    IFS=':' read -ra colArr <<< "$cols"
-    IFS=':' read -ra typeArr <<< "$types"
+    IFS=':' read -a colArr <<< "$cols"
+    IFS=':' read -a typeArr <<< "$types"
 
-
-    pkIndex=-1
-    for i in "${!colArr[@]}"; do
-        if [ "${colArr[$i]}" = "$pkName" ]; then
-            pkIndex=$i
-            break
-        fi
-    done
 
     row=""
     for i in "${!colArr[@]}"; do
@@ -139,7 +133,7 @@ function insertTable() {
         fi
 
         if [ $i -eq $pkIndex ]; then
-            if cut -d: -f$((pkIndex+1)) "$tname" | tail -n +4 | grep -qx "$val"; then
+            if cut -d: -f1 "$tname" | tail -n +4 | grep -qx "$val"; then
                 echo "Duplicate primary key '$val' detected. Insert cancelled."
                 return
             fi
@@ -152,6 +146,99 @@ function insertTable() {
     echo "Row inserted!"
 }
 
+function updateRow() {
+    echo "Table name:"
+    read tname
+
+    if [ ! -f "$tname" ]; then
+        echo "Table not found!"
+        return
+    fi
+
+    cols=$(head -n 1 "$tname")
+    types=$(head -n 2 "$tname" | tail -n 1)
+    pkName=$(head -n 3 "$tname" | tail -n 1 | cut -d: -f2)
+
+    IFS=':' read -a colArr <<< "$cols"
+    IFS=':' read -a typeArr <<< "$types"
+
+    echo "Enter primary key value to update:"
+    read pkValue
+
+
+    if ! cut -d: -f1 "$tname" | tail -n +4 | grep -qx "$pkValue"; then
+        echo "Row with primary key '$pkValue' not found!"
+        return
+    fi
+
+
+    echo "Current row:"
+    grep "^$pkValue:" "$tname"
+
+    newRow=""
+    for i in "${!colArr[@]}"; do
+        col="${colArr[$i]}"
+        ctype="${typeArr[$i]}"
+
+        if [ $i -eq 0 ]; then
+
+            newRow="${newRow}${pkValue}:"
+        else
+            read -p "Enter new $col ($ctype): " val
+
+            if [ "$ctype" = "number" ]; then
+                if ! [[ $val =~ ^[0-9]+$ ]]; then
+                    echo "Invalid input: $col must be a number (digits only). Update cancelled."
+                    return
+                fi
+            fi
+
+            newRow="${newRow}${val}:"
+        fi
+    done
+
+
+    grep -v "^$pkValue:" "$tname" > temp_file
+    echo "${newRow%:}" >> temp_file
+    mv temp_file "$tname"
+    echo "Row updated!"
+}
+
+function deleteRow() {
+    echo "Table name:"
+    read tname
+
+    if [ ! -f "$tname" ]; then
+        echo "Table not found!"
+        return
+    fi
+
+    pkName=$(head -n 3 "$tname" | tail -n 1 | cut -d: -f2)
+
+    echo "Enter primary key value to delete:"
+    read pkValue
+
+
+    if ! cut -d: -f1 "$tname" | tail -n +4 | grep -qx "$pkValue"; then
+        echo "Row with primary key '$pkValue' not found!"
+        return
+    fi
+
+
+    echo "Row to be deleted:"
+    grep "^$pkValue:" "$tname"
+
+    echo "Are you sure? (y/n)"
+    read confirm
+
+    if [ "$confirm" == "y" ]; then
+        grep -v "^$pkValue:" "$tname" > temp_file
+        mv temp_file "$tname"
+        echo "Row deleted!"
+    else
+        echo "Delete cancelled!"
+    fi
+}
 
 function display() {
     file="$1"
@@ -172,7 +259,6 @@ function display() {
     {
         for (i=1; i<=NF; i++) {
             if (length($i) > w[i]) w[i]=length($i)
-            data[NR,i]=$i
         }
         rows[NR]=$0
     }

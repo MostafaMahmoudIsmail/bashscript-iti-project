@@ -132,7 +132,7 @@ function insertTable() {
             fi
         fi
 
-        if [ $i -eq $pkIndex ]; then
+        if [ $i -eq 0 ]; then
             if cut -d: -f1 "$tname" | tail -n +4 | grep -qx "$val"; then
                 echo "Duplicate primary key '$val' detected. Insert cancelled."
                 return

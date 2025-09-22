@@ -157,7 +157,6 @@ function updateRow() {
 
     cols=$(head -n 1 "$tname")
     types=$(head -n 2 "$tname" | tail -n 1)
-    pkName=$(head -n 3 "$tname" | tail -n 1 | cut -d: -f2)
 
     IFS=':' read -a colArr <<< "$cols"
     IFS=':' read -a typeArr <<< "$types"
